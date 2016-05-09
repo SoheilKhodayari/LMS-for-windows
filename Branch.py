@@ -1,13 +1,16 @@
 __author__ = 'soheil'
 from PyQt4 import QtGui,QtCore
 from PyQt4.QtGui import *
-
+from SaCursor import cur as ncur
+from table import BranchTable
 class BranchReg(QWidget):
-    def __init__( self, parent=None  ):
+    def __init__( self,cur,type, parent=None  ):
         super(BranchReg, self).__init__(parent)
         self.initUI()
         # self.setMinimumWidth(400)
         # self.setMinimumHeight(400)
+        self.cur=cur
+        self.type=type
         self.setWindowTitle("Branch Registration")
     def initUI(self):
         self.btn_done=QtGui.QPushButton('Done',self)
@@ -149,4 +152,349 @@ class BranchReg(QWidget):
         Hbox2.addWidget(group)
         self.setLayout(Hbox2)
     def done(self):
-        pass
+        Comma=','
+        try :
+            branchID=str(self.branch_id_le.text())
+            name=str(self.name_le.text())
+            head_id=str(self.head_id_le.text())
+            city=str(self.city_le.text())
+            district=str(self.district_le.text())
+            street=str(self.street_le.text())
+            alley=str(self.alley_le.text())
+            building_no=str(self.building_no_le.text())
+            postal_code=str(self.postal_code_le.text())
+            print 'BranchInsert '+branchID+Comma+name+Comma+head_id+Comma+city+Comma+district+Comma+street+Comma+alley+Comma+building_no+Comma+postal_code
+            ncur.execute('EXEC BranchInsert '+branchID+Comma+name+Comma+head_id+Comma+city+Comma+district+Comma+street+Comma+alley+Comma+building_no+Comma+postal_code+';Commit;')
+
+            phones=str(self.phone_le.text()).split()
+            faxes=str(self.Fax_le.text()).split()
+            websites=str(self.Website_le.text()).split()
+            emails=str(self.email_le.text()).split()
+            for phone in phones:
+                 ncur.execute('EXEC BranchPhoneInsert '+branchID+Comma+'\"' +phone +'\"' +';Commit;')
+            for fax in faxes:
+                 ncur.execute('EXEC BranchFaxInsert '+branchID+Comma+'\"' +fax+'\"'+';Commit;')
+            for wbs in websites:
+                 #print 'EXEC BranchWebsiteInsert '+branchID+Comma+'\"'+wbs+'\"'+';Commit;'
+                 ncur.execute('EXEC BranchWebsiteInsert '+branchID+Comma+'\"'+wbs+'\"'+';Commit;')
+            for email in emails:
+                 ncur.execute('EXEC BranchEmailInsert '+branchID+Comma+'\"'+email+'\"'+';Commit;')
+
+            print 'successfully inserted'
+            self.close()
+
+        except :
+            self.errors.setText("There are some errors in your inserted fields, fix them and then try again")
+
+
+class BranchSearch(QtGui.QWidget):
+    def __init__( self,cur,type, parent=None  ):
+        super(BranchSearch, self).__init__(parent)
+        self.cur=cur
+        self.type=type
+        self.setWindowTitle('Branch Search')
+        self.initUI()
+    def initUI(self):
+        self.Btb=None
+        self.data=None
+        self.searchType_le=QtGui.QLineEdit()
+        self.searchType_le.setReadOnly(True)
+        self.searchField_le=QtGui.QLineEdit()
+        self.searchField_le.setPlaceholderText('')
+        self.searchField_lb=QtGui.QPushButton('SearchField',self)
+        self.searchType = QtGui.QComboBox(self)
+        self.searchType.setFixedSize(75,23)
+        self.searchType.addItem("FullList")
+        self.searchType.addItem("ByID")
+        self.searchType.addItem("ByName")
+        self.searchType.addItem("ByCity")
+        self.searchType.activated[str].connect(self.onActivated)
+
+        self.execute=QtGui.QPushButton('execute',self)
+        self.execute.clicked.connect(self.executeAction)
+
+        hds=QtGui.QHBoxLayout()
+        self.lbl1=QtGui.QLabel()
+        hds.addWidget(self.lbl1)
+        hq=QtGui.QHBoxLayout()
+        self.lbl=QtGui.QLabel()
+        hq.addWidget(self.lbl)
+        h1=QtGui.QHBoxLayout()
+        h1.addWidget(self.searchType)
+        h1.addWidget(self.searchType_le)
+        h2=QtGui.QHBoxLayout()
+        h2.addWidget(self.searchField_lb)
+        h2.addWidget(self.searchField_le)
+        h3=QtGui.QHBoxLayout()
+        h3.addWidget(self.execute)
+        self.v=QtGui.QVBoxLayout()
+        self.v.addLayout(h1)
+        self.v.addLayout(h2)
+        self.v.addLayout(hq)
+        self.v.addLayout(h3)
+
+        self.group=QtGui.QGroupBox('Branch Search')
+        self.group.setLayout(self.v)
+        self.Vbox=QtGui.QVBoxLayout()
+        self.Vbox.addLayout(hds)
+        self.Vbox.addWidget(self.group)
+
+        self.setLayout(self.Vbox)
+
+
+
+
+    def executeAction(self):
+        self.lbl.setText("")
+        self.opcode=None
+        t=str(self.searchType_le.text())
+        if t=="FullList": self.opcode=0
+        elif t=="ByID": self.opcode=1
+        elif t=="ByName": self.opcode=2
+        elif t=="ByCity": self.opcode=3
+        else: self.opcode=0
+
+        field=str(self.searchField_le.text())
+
+        if self.opcode==0:
+            try:
+                ncur.execute("select * from getBranchList()")
+                self.data=ncur.fetchall()
+            except:
+                self.lbl.setText("               No results were found, Please Search a More Precise Value.")
+
+        elif self.opcode==1:
+            try:
+                ncur.execute("select * from getBranchById("+field+")")
+                self.data=ncur.fetchall()
+            except:
+                self.lbl.setText("               No results were found, Please Search a More Precise Value.")
+        elif self.opcode==2:
+            try:
+                ncur.execute("select * from getBranchListByName("+"\'"+field+"\'"+")")
+                self.data=ncur.fetchall()
+            except:
+                self.lbl.setText("               No results were found, Please Search a More Precise Value.")
+        elif self.opcode==3:
+            try:
+                ncur.execute("select * from getBranchListByCity("+"\'"+field+"\'"+")")
+                self.data=ncur.fetchall()
+            except:
+                self.lbl.setText("               No results were found, Please Search a More Precise Value.")
+
+
+        if len(self.data)!=0:
+            if self.Btb is None:
+                self.lbl.setText("")
+                self.Btb=BranchTable(self.data)
+            else:
+                self.lbl.setText("")
+                self.Btb.setParent(None)
+                self.Btb=BranchTable(self.data)
+
+
+
+            self.Vbox.addWidget(self.Btb)
+        else:
+             self.lbl.setText("               No results were found, Please Search a More Precise Value.")
+             print 'no results were found'
+
+
+    def onActivated(self,text):
+        self.searchType_le.setText(text)
+
+
+class BranchContact(QtGui.QWidget):
+    def __init__( self,cur,type, parent=None  ):
+        super(BranchContact, self).__init__(parent)
+        self.cur=cur
+        self.type=type
+        self.initUI()
+    def initUI(self):
+        self.setWindowTitle('Branch Contact')
+        self.error_lb=QtGui.QLabel()
+        self.id_lb=QtGui.QLabel('Branch ID:')
+        self.id_le=QtGui.QLineEdit()
+        self.contact_le=QtGui.QTextEdit()
+        self.contact_le.setReadOnly(True)
+        self.execbtn=QtGui.QPushButton('execute')
+        self.execbtn.clicked.connect(self.done)
+
+        h1=QtGui.QHBoxLayout()
+        h1.addWidget(self.id_lb)
+        h1.addWidget(self.id_le)
+        h2=QtGui.QHBoxLayout()
+        h2.addWidget(self.execbtn)
+        h3=QtGui.QHBoxLayout()
+        h3.addWidget(self.error_lb)
+        h4=QtGui.QHBoxLayout()
+        h4.addWidget(self.contact_le)
+
+        vb=QtGui.QVBoxLayout()
+        vb.addLayout(h1)
+        vb.addLayout(h2)
+        vb.addLayout(h3)
+        vb.addLayout(h4)
+        group=QtGui.QGroupBox('Contact')
+        group.setLayout(vb)
+
+        hbox=QtGui.QHBoxLayout()
+        hbox.addWidget(group)
+        self.setLayout(hbox)
+
+
+    def done(self):
+        flag=True
+        cont_dict=dict()
+        cont_dict['mailList']=''
+        cont_dict['phoneList']=''
+        cont_dict['faxList']=''
+        cont_dict['websiteList']=''
+
+        bid=str(self.id_le.text())
+
+
+        if bid=='':
+            bid=None
+            self.error_lb.setText('Please enter the Branch ID Properly')
+            self.contact_le.setText('')
+        if bid is not None:
+                try:
+                    ncur.execute('select branch_id from Branch where branch_id='+bid)
+                except:
+                    flag=False
+                    self.error_lb.setText('Please enter a valid Branch ID')
+                    self.contact_le.setText('')
+                m=ncur.fetchall()
+                print m
+                if len(m)==0:
+                    flag=False
+                    self.error_lb.setText('Please enter a valid Branch ID')
+                    self.contact_le.setText('')
+
+
+
+        if bid is not None and flag:
+                self.error_lb.setText('')
+
+                ncur.execute('select * from Branch_email where branch_id='+bid)
+                for elm in ncur.fetchall():
+                    cont_dict['mailList']+='    '+elm[1]+'\n'
+
+
+                ncur.execute('select * from Branch_phone where branch_id='+bid)
+                for elm in ncur.fetchall():
+                    cont_dict['phoneList']+='    '+elm[1]+'\n'
+
+
+                ncur.execute('select * from Branch_fax where branch_id='+bid)
+                for elm in ncur.fetchall():
+                    cont_dict['faxList']+='    '+elm[1]+'\n'
+
+
+                ncur.execute('select * from Branch_website where branch_id='+bid)
+                for elm in ncur.fetchall():
+                    cont_dict['websiteList']+='    '+elm[1]+'\n'
+
+                text='Phones: \n' + cont_dict['phoneList'] + '\n' \
+                     'Mails: \n' + cont_dict['mailList'] + '\n' \
+                     'Faxes: \n' + cont_dict['faxList'] + '\n'  \
+                     'Websites: \n' + cont_dict['websiteList'] + '\n'
+
+
+                self.contact_le.setText(text)
+
+
+class BranchDelete(QtGui.QWidget):
+    def __init__( self,cur,type, parent=None  ):
+        super(BranchDelete, self).__init__(parent)
+        self.cur=cur
+        self.type=type
+        self.initUI()
+    def initUI(self):
+        self.setWindowTitle('Branch Deletion')
+        self.error_lb=QtGui.QLabel()
+        self.id_lb=QtGui.QLabel('Branch ID:')
+        self.id_le=QtGui.QLineEdit()
+        self.res_le=QtGui.QTextEdit()
+        self.res_le.setText('Result:'+'\n')
+        self.res_le.setReadOnly(True)
+        self.execbtn=QtGui.QPushButton('execute')
+        self.execbtn.clicked.connect(self.done)
+
+        h1=QtGui.QHBoxLayout()
+        h1.addWidget(self.id_lb)
+        h1.addWidget(self.id_le)
+        h2=QtGui.QHBoxLayout()
+        h2.addWidget(self.execbtn)
+        h3=QtGui.QHBoxLayout()
+        h3.addWidget(self.error_lb)
+        h4=QtGui.QHBoxLayout()
+        h4.addWidget(self.res_le)
+
+        vb=QtGui.QVBoxLayout()
+        vb.addLayout(h1)
+        vb.addLayout(h2)
+        vb.addLayout(h3)
+        vb.addLayout(h4)
+        group=QtGui.QGroupBox('Removal')
+        group.setLayout(vb)
+
+        hbox=QtGui.QHBoxLayout()
+        hbox.addWidget(group)
+        self.setLayout(hbox)
+
+
+    def done(self):
+        flag=True
+        insID=str(self.id_le.text())
+
+        if insID=='':
+            insID=None
+            self.error_lb.setText('Please enter the Branch ID Properly')
+            self.res_le.setText('Result:'+'\n'+"No Operation Done Due to A Previous Error\n")
+        if insID is not None:
+                try:
+                    ncur.execute('select branch_id from branch where branch_id='+insID)
+                except:
+                    flag=False
+                    self.error_lb.setText('Please enter a valid Branch ID')
+                    self.res_le.setText('Result:'+'\n'+"No Operation Done Due to A Previous Error")
+                m=ncur.fetchall()
+                print m
+                if len(m)==0:
+                    flag=False
+                    self.error_lb.setText('Please enter a valid Branch ID')
+                    self.res_le.setText('Result:'+'\n'+"No Operation Done Due to A Previous Error")
+        if insID is not None and flag:
+                self.error_lb.setText('')
+                self.res_le.setText('Result:'+'\n')
+
+                try:
+                    drop="EXEC sp_msforeachtable \"ALTER TABLE ? NOCHECK CONSTRAINT all\""
+                    activate="exec sp_msforeachtable \"ALTER TABLE ? WITH CHECK CHECK CONSTRAINT all\""
+                    U='delete from branch where branch_id='+insID
+                    ncur.execute(drop)
+                    ncur.execute(U)
+                    ncur.commit()
+                    ncur.execute(activate)
+                    ncur.commit()
+                    self.res_le.setText(str(self.res_le.toPlainText())+"Your Request Has \n Been Executed Successfully\n")
+                except:
+                    self.res_le.setText(str(self.res_le.toPlainText())+"Fatal Error: Check Your Inputed ID")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -9,15 +9,20 @@ from PyQt4.QtCore import QUrl
 from PyQt4.QtWebKit import QWebView
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
-
+from SaCursor import cur as ncur
+from table import MemTable
 class MemberReg(QWidget):
-    def __init__( self, parent=None  ):
+    def __init__( self,cur,type, parent=None  ):
         super(MemberReg, self).__init__(parent)
         self.initUI()
         self.setMinimumWidth(400)
         self.setMinimumHeight(400)
         self.setWindowTitle("Member Registration")
+        self.cur=cur
+        self.type=type
     def initUI(self):
+        self.errors=QtGui.QLabel(self)
+
         self.btn_done=QtGui.QPushButton('Done',self)
         self.btn_done.resize(self.btn_done.sizeHint())
         self.connect(self.btn_done, QtCore.SIGNAL("clicked()"),self.done)
@@ -212,6 +217,7 @@ class MemberReg(QWidget):
         vb=QtGui.QVBoxLayout()
         vb.addLayout(hb1)
         vb.addLayout(hb2)
+        vb.addWidget(self.errors)
         vb.addLayout(self.h14)
 
         group=QtGui.QGroupBox('')
@@ -219,16 +225,75 @@ class MemberReg(QWidget):
         Hbox2=QtGui.QHBoxLayout()
         Hbox2.addWidget(group)
         self.setLayout(Hbox2)
+
     def onActivated(self,text):   #self.combo3.currenttext() also catches its selection
-        self.mem_type_le.setText(str(text))
+
+        if text=='Premium':
+            self.mem_type_le.setText(str(1))
+        elif text=='Normal':
+            self.mem_type_le.setText(str(0))
+    def convertDate(self,date):
+        """ converts date to mssql date format """
+
+        first=date.index('/')
+        s0=date[:first]
+        if len(s0)==1: s0="0"+s0
+        tmp=date[first+1:]
+        second=tmp.index('/')
+        s1=tmp[:second]
+        if len(s1)==1: s1="0"+s1
+        s2=tmp[second+1:]
+        res= s2+"-"+s1+"-"+s0
+        return str(res)
+
+
     def done(self):
-        pass
+        Comma=','
+        try:
+            memID=str(self.mem_id_le.text())
+            fname=str(self.fname_le.text())
+            lname=str(self.lname_le.text())
+            memShipDate=self.convertDate(str(self.membership_date_le.text()))
+            ExpDate=self.convertDate(str(self.expiry_date_le.text()))
+            ssn=str(self.ssn_le.text())
+            serial=str(self.serial_ssc_le.text())
+            ISL=str(self.issuancelocation_ssc_le.text())
+            birthDate=self.convertDate(str(self.birthdate_ssc_le.text()))
+            country='Iran'
+            city=str(self.city_le.text())
+            district=str(self.district_le.text())
+            street=str(self.street_le.text())
+            alley=str(self.alley_le.text())
+            buildingNo=str(self.building_no_le.text())
+            postalCode=str(self.postal_code_le.text())
+            branchID=str(self.branch_id_le.text())
+            MemshipType=str(self.mem_type_le.text())
+            HasPenalty='0'
+            phones=str(self.phone_le.text()).split()
+            emails=str(self.email_le.text()).split()
+
+            a='EXEC MemberInsert '+memID+Comma+fname+Comma+lname+',\"'+memShipDate+'\",\"'+ExpDate+'\",'+ssn+Comma+'\''+serial+'\''+Comma+ISL+Comma+'\"'+birthDate+'\"'+Comma+country+Comma+city+Comma+district+Comma+street+Comma+alley+Comma+buildingNo+Comma+postalCode+Comma+branchID+Comma+'\"'+MemshipType+'\"'+Comma+'\"'+HasPenalty+'\"'+';Commit;'
+
+            ncur.execute(a)
+
+            for phone in phones:
+                 ncur.execute('EXEC MemberPhoneInsert '+memID+Comma+'\"' +phone +'\"' +';Commit;')
+            for email in emails:
+                 ncur.execute('EXEC MemberEmailInsert '+memID+Comma+'\"'+email+'\"'+';Commit;')
+
+            print 'successfully inserted member'
+            self.close()
+
+        except:
+            self.errors.setText("There are some errors in your inserted fields, fix them and then try again")
 
 class Penalty(QWidget):
-    def __init__( self, parent=None  ):
+    def __init__( self,cur,type, parent=None  ):
         super(Penalty, self).__init__(parent)
         self.setWindowTitle("Check And Cancel Member Penalty")
         self.initUI()
+        self.cur=cur
+        self.type=type
     def initUI(self):
         self.btn_done=QtGui.QPushButton('Check',self)
         self.btn_done.resize(self.btn_done.sizeHint())
@@ -267,16 +332,307 @@ class Penalty(QWidget):
         Hbox2.addWidget(group)
         self.setLayout(Hbox2)
     def done(self):
-        pass
-        #if member does'nt has Penalty
-                # set self.msg_label to this member has no penalty
-        #if member has penalty
-                #set msg laber to this member has penalty
-        self.msg_label.setText("This Member Has Penalty, Cancel it here.")
-        hb=QtGui.QHBoxLayout()
-        hb.addWidget(self.inscribe_btn)
-        self.v1.addLayout(hb)
+        memID=str(self.mem_id_le.text())
+        ncur.execute('select has_penalty from member where mem_id='+memID)
+        if str(ncur.fetchall()[0][0])=='0':
+                self.msg_label.setText('This Member Has No Penalty.')
+        else:
+
+            self.msg_label.setText("This Member Has Penalty, Cancel it here.")
+            hb=QtGui.QHBoxLayout()
+            hb.addWidget(self.inscribe_btn)
+            self.v1.addLayout(hb)
 
     def inscribe(self):
-        #cancel penalty of member if this btn is clicked
-        pass
+        memID=str(self.mem_id_le.text())
+        ncur.execute('EXEC CancelPenalty '+memID+';Commit;')
+        print 'penalty cancelled'
+        self.close()
+
+
+
+class MemberSearch(QtGui.QWidget):
+    def __init__( self,cur,type, parent=None  ):
+        super(MemberSearch, self).__init__(parent)
+        self.cur=cur
+        self.type=type
+        self.setWindowTitle('Member Search')
+        self.initUI()
+    def initUI(self):
+        self.Btb=None
+        self.data=None
+        self.searchType_le=QtGui.QLineEdit()
+        self.searchType_le.setReadOnly(True)
+        self.searchField_le=QtGui.QLineEdit()
+        self.searchField_le.setPlaceholderText('')
+        self.searchField_lb=QtGui.QPushButton('SearchField',self)
+        self.searchType = QtGui.QComboBox(self)
+        self.searchType.setFixedSize(75,23)
+        self.searchType.addItem("MemList")
+        self.searchType.addItem("ByID")
+        self.searchType.addItem("ByFname")
+        self.searchType.addItem("ByLname")
+        self.searchType.activated[str].connect(self.onActivated)
+
+        self.execute=QtGui.QPushButton('execute',self)
+        self.execute.clicked.connect(self.executeAction)
+
+        hds=QtGui.QHBoxLayout()
+        self.lbl1=QtGui.QLabel()
+        hds.addWidget(self.lbl1)
+        hq=QtGui.QHBoxLayout()
+        self.lbl=QtGui.QLabel()
+        hq.addWidget(self.lbl)
+        h1=QtGui.QHBoxLayout()
+        h1.addWidget(self.searchType)
+        h1.addWidget(self.searchType_le)
+        h2=QtGui.QHBoxLayout()
+        h2.addWidget(self.searchField_lb)
+        h2.addWidget(self.searchField_le)
+        h3=QtGui.QHBoxLayout()
+        h3.addWidget(self.execute)
+        self.v=QtGui.QVBoxLayout()
+        self.v.addLayout(h1)
+        self.v.addLayout(h2)
+        self.v.addLayout(hq)
+        self.v.addLayout(h3)
+
+        self.group=QtGui.QGroupBox('Member Search')
+        self.group.setLayout(self.v)
+        self.Vbox=QtGui.QVBoxLayout()
+        self.Vbox.addLayout(hds)
+        self.Vbox.addWidget(self.group)
+
+        self.setLayout(self.Vbox)
+
+
+
+
+    def executeAction(self):
+        self.lbl.setText("")
+        self.opcode=None
+        t=str(self.searchType_le.text())
+        if t=="MemList": self.opcode=0
+        elif t=="ByID": self.opcode=1
+        elif t=="ByFname": self.opcode=2
+        elif t=="ByLname": self.opcode=3
+        else: self.opcode=0
+
+        field=str(self.searchField_le.text())
+
+        if self.opcode==0:
+            try:
+                ncur.execute("select * from getMemberList()")
+                self.data=ncur.fetchall()
+            except:
+                self.lbl.setText("               No results were found, Please Search a More Precise Value.")
+
+        elif self.opcode==1:
+            try:
+                ncur.execute("select * from getMemberById("+field+")")
+                self.data=ncur.fetchall()
+            except:
+                self.lbl.setText("               No results were found, Please Search a More Precise Value.")
+        elif self.opcode==2:
+            try:
+                ncur.execute("select * from getMemberListByFname("+"\'"+field+"\'"+")")
+                self.data=ncur.fetchall()
+            except:
+                self.lbl.setText("               No results were found, Please Search a More Precise Value.")
+        elif self.opcode==3:
+            try:
+                ncur.execute("select * from getMemberListByLname("+"\'"+field+"\'"+")")
+                self.data=ncur.fetchall()
+            except:
+                self.lbl.setText("               No results were found, Please Search a More Precise Value.")
+
+        if len(self.data)!=0:
+            if self.Btb is None:
+                self.lbl.setText("")
+                if self.opcode!=3:
+                    self.Btb=MemTable(self.data)
+                else:
+                    self.Btb=MemTable(self.data)
+            else:
+                self.lbl.setText("")
+                self.Btb.setParent(None)
+                if self.opcode!=3:
+                    self.Btb=MemTable(self.data)
+                else:
+                    self.Btb=MemTable(self.data)
+
+            self.Vbox.addWidget(self.Btb)
+        else:
+            self.lbl.setText("               No results were found, Please Search a More Precise Value.")
+            print 'no results were found'
+
+
+    def onActivated(self,text):
+        self.searchType_le.setText(text)
+
+class MemContact(QtGui.QWidget):
+    def __init__( self,cur,type, parent=None  ):
+        super(MemContact, self).__init__(parent)
+        self.cur=cur
+        self.type=type
+        self.initUI()
+    def initUI(self):
+        self.setWindowTitle('Member Contact')
+        self.error_lb=QtGui.QLabel()
+        self.id_lb=QtGui.QLabel('Member ID:')
+        self.id_le=QtGui.QLineEdit()
+        self.contact_le=QtGui.QTextEdit()
+        self.contact_le.setReadOnly(True)
+        self.execbtn=QtGui.QPushButton('execute')
+        self.execbtn.clicked.connect(self.done)
+
+        h1=QtGui.QHBoxLayout()
+        h1.addWidget(self.id_lb)
+        h1.addWidget(self.id_le)
+        h2=QtGui.QHBoxLayout()
+        h2.addWidget(self.execbtn)
+        h3=QtGui.QHBoxLayout()
+        h3.addWidget(self.error_lb)
+        h4=QtGui.QHBoxLayout()
+        h4.addWidget(self.contact_le)
+
+        vb=QtGui.QVBoxLayout()
+        vb.addLayout(h1)
+        vb.addLayout(h2)
+        vb.addLayout(h3)
+        vb.addLayout(h4)
+        group=QtGui.QGroupBox('Contact')
+        group.setLayout(vb)
+
+        hbox=QtGui.QHBoxLayout()
+        hbox.addWidget(group)
+        self.setLayout(hbox)
+
+
+    def done(self):
+        flag=True
+        cont_dict=dict()
+        cont_dict['mailList']=''
+        cont_dict['phoneList']=''
+
+        bid=str(self.id_le.text())
+
+
+        if bid=='':
+            bid=None
+            self.error_lb.setText('Please enter the Mem ID Properly')
+            self.contact_le.setText('')
+        if bid is not None:
+                try:
+                    ncur.execute('select mem_id from Member where mem_id='+bid)
+                except:
+                    flag=False
+                    self.error_lb.setText('Please enter a valid Mem ID')
+                    self.contact_le.setText('')
+                m=ncur.fetchall()
+                if len(m)==0:
+                    flag=False
+                    self.error_lb.setText('Please enter a valid Mem ID')
+                    self.contact_le.setText('')
+
+
+
+        if bid is not None and flag:
+                self.error_lb.setText('')
+
+                ncur.execute('select * from member_email where member_id='+bid)
+                for elm in ncur.fetchall():
+                    cont_dict['mailList']+='    '+elm[0]+'\n'
+
+                ncur.execute('select * from member_phone where member_id='+bid)
+                for elm in ncur.fetchall():
+                    cont_dict['phoneList']+='    '+elm[0]+'\n'
+
+
+
+                text='Phones: \n' + cont_dict['phoneList'] + '\n' \
+                     'Mails: \n' + cont_dict['mailList']
+
+
+
+                self.contact_le.setText(text)
+
+class MemDelete(QtGui.QWidget):
+    def __init__( self,cur,type, parent=None  ):
+        super(MemDelete, self).__init__(parent)
+        self.cur=cur
+        self.type=type
+        self.initUI()
+    def initUI(self):
+        self.setWindowTitle('Member Deletion')
+        self.error_lb=QtGui.QLabel()
+        self.id_lb=QtGui.QLabel('Member ID:')
+        self.id_le=QtGui.QLineEdit()
+        self.res_le=QtGui.QTextEdit()
+        self.res_le.setText('Result:'+'\n')
+        self.res_le.setReadOnly(True)
+        self.execbtn=QtGui.QPushButton('execute')
+        self.execbtn.clicked.connect(self.done)
+
+        h1=QtGui.QHBoxLayout()
+        h1.addWidget(self.id_lb)
+        h1.addWidget(self.id_le)
+        h2=QtGui.QHBoxLayout()
+        h2.addWidget(self.execbtn)
+        h3=QtGui.QHBoxLayout()
+        h3.addWidget(self.error_lb)
+        h4=QtGui.QHBoxLayout()
+        h4.addWidget(self.res_le)
+
+        vb=QtGui.QVBoxLayout()
+        vb.addLayout(h1)
+        vb.addLayout(h2)
+        vb.addLayout(h3)
+        vb.addLayout(h4)
+        group=QtGui.QGroupBox('Removal')
+        group.setLayout(vb)
+
+        hbox=QtGui.QHBoxLayout()
+        hbox.addWidget(group)
+        self.setLayout(hbox)
+
+
+    def done(self):
+        flag=True
+        insID=str(self.id_le.text())
+
+        if insID=='':
+            insID=None
+            self.error_lb.setText('Please enter the Member ID Properly')
+            self.res_le.setText('Result:'+'\n'+"No Operation Done Due to A Previous Error\n")
+        if insID is not None:
+                try:
+                    ncur.execute('select mem_id from member where mem_id='+insID)
+                except:
+                    flag=False
+                    self.error_lb.setText('Please enter a valid Member ID')
+                    self.res_le.setText('Result:'+'\n'+"No Operation Done Due to A Previous Error")
+                m=ncur.fetchall()
+                print m
+                if len(m)==0:
+                    flag=False
+                    self.error_lb.setText('Please enter a valid Member ID')
+                    self.res_le.setText('Result:'+'\n'+"No Operation Done Due to A Previous Error")
+        if insID is not None and flag:
+                self.error_lb.setText('')
+                self.res_le.setText('Result:'+'\n')
+
+                try:
+                    drop="EXEC sp_msforeachtable \"ALTER TABLE ? NOCHECK CONSTRAINT all\""
+                    activate="exec sp_msforeachtable \"ALTER TABLE ? WITH CHECK CHECK CONSTRAINT all\""
+                    U='delete from Member where mem_id='+insID
+                    ncur.execute(drop)
+                    ncur.execute(U)
+                    ncur.commit()
+                    ncur.execute(activate)
+                    ncur.commit()
+                    self.res_le.setText(str(self.res_le.toPlainText())+"Your Request Has \n Been Executed Successfully\n")
+                except:
+                    self.res_le.setText(str(self.res_le.toPlainText())+"Fatal Error: Check Your Inputed ID")
+
+
